@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<html lang="zh-Hant">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>狼人殺 Online</title>
+
+<style>
+
+body{
+
+    margin:0;
+    background:#0f172a;
+    color:white;
+    font-family:Microsoft JhengHei;
+}
+
+#joinPage{
+
+    height:100vh;
+
+    display:flex;
+
+    flex-direction:column;
+
+    justify-content:center;
+
+    align-items:center;
+
+    gap:10px;
+}
+
+input{
+
+    padding:12px;
+
+    width:250px;
+
+    border:none;
+
+    border-radius:8px;
+}
+
+button{
+
+    padding:12px 24px;
+
+    border:none;
+
+    border-radius:8px;
+
+    cursor:pointer;
+}
+
+.container{
+
+    display:flex;
+
+    height:90vh;
+}
+
+.sidebar{
+
+    width:20%;
+
+    background:#1e293b;
+
+    padding:20px;
+}
+
+.main{
+
+    flex:1;
+
+    display:flex;
+
+    flex-direction:column;
+}
+
+#messages{
+
+    flex:1;
+
+    overflow:auto;
+
+    padding:20px;
+}
+
+.chatbar{
+
+    display:flex;
+
+    padding:10px;
+
+    background:#1e293b;
+}
+
+.chatbar input{
+
+    flex:1;
+}
+
+.rightbar{
+
+    width:20%;
+
+    background:#1e293b;
+
+    padding:20px;
+}
+
+.topbar{
+
+    height:10vh;
+
+    background:#111827;
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    padding:0 20px;
+}
+
+.player{
+
+    padding:8px;
+
+    background:#334155;
+
+    margin-bottom:8px;
+
+    border-radius:8px;
+}
+
+.dead{
+
+    opacity:0.5;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="joinPage">
+
+    <h1>狼人殺 Online</h1>
+
+    <input id="name" placeholder="你的名字">
+
+    <input id="room" placeholder="房號">
+
+    <button onclick="joinRoom()">
+        加入房間
+    </button>
+
+</div>
+
+<div id="gamePage" style="display:none;">
+
+    <div class="topbar">
+
+        <div id="phase">
+            等待開始
+        </div>
+
+        <button onclick="startGame()">
+            開始遊戲
+        </button>
+
+    </div>
+
+    <div class="container">
+
+        <div class="sidebar">
+
+            <h2>玩家</h2>
+
+            <div id="players"></div>
+
+        </div>
+
+        <div class="main">
+
+            <div id="messages"></div>
+
+            <div class="chatbar">
+
+                <input id="msg">
+
+                <button onclick="sendMsg()">
+                    送出
+                </button>
+
+            </div>
+
+        </div>
+
+        <div class="rightbar">
+
+            <h2>你的身份</h2>
+
+            <div id="role">
+                未知
+            </div>
+
+            <hr>
+
+            <h2>投票</h2>
+
+            <input id="voteTarget"
+                   placeholder="輸入玩家名稱">
+
+            <button onclick="votePlayer()">
+                投票
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+let ws;
+
+function joinRoom(){
+
+    const name =
+        document.getElementById("name").value;
+
+    const room =
+        document.getElementById("room").value;
+
+    ws = new WebSocket(
+        `ws://localhost:8000/ws/${room}/${name}`
+    );
+
+    ws.onopen = ()=>{
+
+        document.getElementById("joinPage")
+            .style.display="none";
+
+        document.getElementById("gamePage")
+            .style.display="block";
+    };
+
+    ws.onmessage = (event)=>{
+
+        const data = JSON.parse(event.data);
+
+        // 系統訊息
+
+        if(data.type === "system"){
+
+            addMessage(
+                "[系統] " + data.message
+            );
+        }
+
+        // 聊天
+
+        else if(data.type === "chat"){
+
+            addMessage(
+                `${data.player}：${data.message}`
+            );
+        }
+
+        // 玩家列表
+
+        else if(data.type === "players"){
+
+            const div =
+                document.getElementById("players");
+
+            div.innerHTML = "";
+
+            data.players.forEach(p=>{
+
+                const d =
+                    document.createElement("div");
+
+                d.className = "player";
+
+                if(!p.alive){
+
+                    d.classList.add("dead");
+                }
+
+                d.innerText =
+                    p.name +
+                    (p.alive ? " 🟢" : " 💀");
+
+                div.appendChild(d);
+            });
+        }
+
+        // 身份
+
+        else if(data.type === "role"){
+
+            document.getElementById("role")
+                .innerText = data.role;
+        }
+
+        // 階段
+
+        else if(data.type === "phase"){
+
+            document.getElementById("phase")
+                .innerText = data.phase;
+
+            if(data.phase === "夜晚"){
+
+                document.body.style.background =
+                    "#020617";
+            }
+
+            if(data.phase === "白天"){
+
+                document.body.style.background =
+                    "#0f172a";
+            }
+        }
+    };
+}
+
+function sendMsg(){
+
+    const msg =
+        document.getElementById("msg").value;
+
+    ws.send(JSON.stringify({
+
+        type:"chat",
+
+        message:msg
+    }));
+
+    document.getElementById("msg").value="";
+}
+
+function addMessage(msg){
+
+    const div =
+        document.createElement("div");
+
+    div.innerText = msg;
+
+    document.getElementById("messages")
+        .appendChild(div);
+
+    document.getElementById("messages")
+        .scrollTop =
+        document.getElementById("messages")
+        .scrollHeight;
+}
+
+function startGame(){
+
+    ws.send(JSON.stringify({
+
+        type:"start"
+    }));
+}
+
+function votePlayer(){
+
+    const target =
+        document.getElementById("voteTarget")
+        .value;
+
+    ws.send(JSON.stringify({
+
+        type:"vote",
+
+        target:target
+    }));
+}
+
+</script>
+
+</body>
+
+</html>
